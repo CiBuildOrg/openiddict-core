@@ -75,9 +75,9 @@ namespace Mvc.Server
                     options.RequireHttpsMetadata = false;
                 });
 
-
-            // Register the OpenIddict services.
-            services.AddOpenIddict(options =>
+           
+                // Register the OpenIddict services.
+                services.AddOpenIddict(options =>
             {
                 // Register the Entity Framework stores.
                 options.AddEntityFrameworkCoreStores<ApplicationDbContext>();
@@ -116,6 +116,7 @@ namespace Mvc.Server
             services.AddTransient<ISmsSender, AuthMessageSender>();
         }
 
+        // ReSharper disable once UnusedMember.Local
         private static void AddAndConfigurePolicies(IServiceCollection services)
         {
             services.AddAuthorization(options =>
@@ -137,41 +138,12 @@ namespace Mvc.Server
 
             app.UseMvcWithDefaultRoute();
 
-
-            //app.UseOAuthValidation(options =>
-            //{
-            //    options.Audiences.Add("resource_server");
-            //});
-
-            ////app.UseOAuthIntrospection(options =>
-            ////{
-            ////    options.Authority = "self";
-            ////    options.Audiences.Add("resource_server");
-            ////    options.ClientId = "resource_server";
-            ////    options.ClientSecret = "875sqd4s5d748z78z7ds1ff8zz8814ff88ed8ea4z4zzd";
-            ////});
-
-
-            //app.UseJwtBearerAuthentication(new JwtBearerOptions
-            //{
-            //    Authority = "self",
-            //    Audience = "resource_server",
-            //    RequireHttpsMetadata = false,
-            //    TokenValidationParameters = new TokenValidationParameters
-            //    {
-            //        NameClaimType = OpenIdConnectConstants.Claims.Subject,
-            //        RoleClaimType = OpenIdConnectConstants.Claims.Role,
-            //    }
-            //});
-
-          
-
             // Seed the database with the sample applications.
             // Note: in a real world application, this step should be part of a setup script.
             InitializeAsync(app.ApplicationServices, CancellationToken.None).GetAwaiter().GetResult();
         }
 
-        private async Task InitializeAsync(IServiceProvider services, CancellationToken cancellationToken)
+        private static async Task InitializeAsync(IServiceProvider services, CancellationToken cancellationToken)
         {
             // Create a new service scope to ensure the database context is correctly disposed when this methods returns.
             using (var scope = services.GetRequiredService<IServiceScopeFactory>().CreateScope())
