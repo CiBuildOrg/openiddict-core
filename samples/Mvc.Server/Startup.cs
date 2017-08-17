@@ -12,30 +12,80 @@ using Mvc.Server.Services;
 using OpenIddict.Core;
 using OpenIddict.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Authorization;
+using Microsoft.Extensions.Logging;
+using Mvc.Server.Filters;
+using Serilog;
+using Swashbuckle.AspNetCore.Swagger;
 
 namespace Mvc.Server
 {
     public class Startup
     {
-        public void ConfigureServices(IServiceCollection services)
+        public IConfigurationRoot Configuration { get; set; }
+
+        public Startup(IHostingEnvironment env)
         {
             var configuration = new ConfigurationBuilder()
-                .AddJsonFile("config.json")
-                .AddEnvironmentVariables()
-                .Build();
+                .SetBasePath(env.ContentRootPath)
+                .AddJsonFile("config.json", false, true)
+                .AddJsonFile($"config.{env.EnvironmentName.ToLower()}.json", true)
+                .AddEnvironmentVariables();
+            Configuration = configuration.Build();
+        }
 
+        public void ConfigureServices(IServiceCollection services)
+        {
+
+            // Add Swagger generator
+            services.AddSwaggerGen(options =>
+            {
+                options.SwaggerDoc("v1", new Info { Title = "My Web API", Version = "v1" });
+            });
+
+            // Add MVC Core
+            services.AddMvcCore(
+                    options =>
+                    {
+                        // Add global authorization filter 
+                        var policy = new AuthorizationPolicyBuilder()
+                            .RequireAuthenticatedUser()
+                            .Build();
+
+                        options.Filters.Add(new AuthorizeFilter(policy));
+
+                        // Add global exception handler for production
+                        options.Filters.Add(typeof(CustomExceptionFilterAttribute));
+
+                        // Add global validation filter
+                        options.Filters.Add(typeof(ValidateModelFilterAttribute));
+
+                    }
+                )
+                .AddJsonFormatters()
+                .AddAuthorization()
+                .AddDataAnnotations()
+                .AddCors()
+                .AddApiExplorer();
             services.AddMvc();
 
             services.AddDbContext<ApplicationDbContext>(options =>
             {
                 // Configure the context to use Microsoft SQL Server.
-                options.UseSqlServer(configuration["ConnectionStrings:IdentityContext"]);
+                options.UseSqlServer(Configuration["ConnectionStrings:IdentityContext"]);
 
                 // Register the entity sets needed by OpenIddict.
                 // Note: use the generic overload if you need
                 // to replace the default OpenIddict entities.
                 options.UseOpenIddict();
             });
+
+            Log.Logger = new LoggerConfiguration()
+                .ReadFrom.Configuration(Configuration)
+                .Enrich.FromLogContext()
+                .CreateLogger();
 
             // Register the Identity services.
             services.AddIdentity<ApplicationUser, IdentityRole>()
@@ -126,9 +176,13 @@ namespace Mvc.Server
             });
         }
 
-        public void Configure(IApplicationBuilder app)
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
         {
-            app.UseDeveloperExceptionPage();
+            loggerFactory.AddSerilog();
+            if (env.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
 
             app.UseStaticFiles();
 
@@ -137,6 +191,17 @@ namespace Mvc.Server
             app.UseAuthentication();
 
             app.UseMvcWithDefaultRoute();
+
+            // Enable middleware to serve generated Swagger as a JSON endpoint.
+            app.UseSwagger();
+
+            // Enable middleware to serve swagger-ui (HTML, JS, CSS etc.), specifying the Swagger JSON endpoint.
+            app.UseSwaggerUI(c =>
+            {
+                c.RoutePrefix = "apidocs";
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "My Web API");
+            });
+
 
             // Seed the database with the sample applications.
             // Note: in a real world application, this step should be part of a setup script.

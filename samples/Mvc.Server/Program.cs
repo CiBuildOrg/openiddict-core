@@ -8,15 +8,16 @@ namespace Mvc.Server
     {
         public static void Main(string[] args)
         {
-            var configuration = new ConfigurationBuilder()
-                .AddEnvironmentVariables()
+            var config = new ConfigurationBuilder()
                 .AddCommandLine(args)
+                .AddEnvironmentVariables(prefix: "ASPNETCORE_")
+                .AddJsonFile("hosting.json")
                 .Build();
 
             var host = new WebHostBuilder()
                 .ConfigureLogging(options => options.AddConsole())
                 .ConfigureLogging(options => options.AddDebug())
-                .UseConfiguration(configuration)
+                .UseConfiguration(config)
                 .UseIISIntegration()
                 .UseKestrel()
                 .UseStartup<Startup>()
