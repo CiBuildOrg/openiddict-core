@@ -7,10 +7,13 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 using Mvc.Server.Models;
 using Mvc.Server.Services;
 using OpenIddict.Core;
 using OpenIddict.Models;
+using AspNet.Security.OAuth.Introspection;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 namespace Mvc.Server
 {
@@ -28,7 +31,7 @@ namespace Mvc.Server
             services.AddDbContext<ApplicationDbContext>(options =>
             {
                 // Configure the context to use Microsoft SQL Server.
-                options.UseSqlServer(configuration["Data:DefaultConnection:ConnectionString"]);
+                options.UseSqlServer(configuration["ConnectionStrings:IdentityContext"]);
 
                 // Register the entity sets needed by OpenIddict.
                 // Note: use the generic overload if you need
@@ -49,29 +52,37 @@ namespace Mvc.Server
                 options.ClaimsIdentity.UserNameClaimType = OpenIdConnectConstants.Claims.Name;
                 options.ClaimsIdentity.UserIdClaimType = OpenIdConnectConstants.Claims.Subject;
                 options.ClaimsIdentity.RoleClaimType = OpenIdConnectConstants.Claims.Role;
+
+                options.Password.RequireDigit = false;
+                options.Password.RequiredLength = 1;
+                options.Password.RequireNonAlphanumeric = false;
+                options.Password.RequireUppercase = false;
+                options.Password.RequireLowercase = false;
+                options.User.AllowedUserNameCharacters = "abcdefghijklmnopqrstuvxyz1234567890!@#$%^&*()_+<>:|";
+                options.User.RequireUniqueEmail = false;
+                options.SignIn.RequireConfirmedEmail = false;
+                options.SignIn.RequireConfirmedPhoneNumber = false;
+                options.Lockout.MaxFailedAccessAttempts = 3;
             });
 
-            services.AddAuthentication()
-                .AddGoogle(options =>
+            services.AddAuthentication(options =>
                 {
-                    options.ClientId = "560027070069-37ldt4kfuohhu3m495hk2j4pjp92d382.apps.googleusercontent.com";
-                    options.ClientSecret = "n2Q-GEw9RQjzcRbU3qhfTj8f";
+                    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
                 })
 
-                .AddTwitter(options =>
+                .AddJwtBearer(options =>
                 {
-                    options.ConsumerKey = "6XaCTaLbMqfj6ww3zvZ5g";
-                    options.ConsumerSecret = "Il2eFzGIrYhz6BWjYhVXBPQSfZuS4xoHpSSyD9PI";
-                })
+                    options.Authority = "self";
+                    options.Audience = "resource-server";
+                    options.RequireHttpsMetadata = false;
+                });
 
-                .AddOAuthValidation();
 
             // Register the OpenIddict services.
             services.AddOpenIddict(options =>
             {
                 // Register the Entity Framework stores.
                 options.AddEntityFrameworkCoreStores<ApplicationDbContext>();
-
                 // Register the ASP.NET Core MVC binder used by OpenIddict.
                 // Note: if you don't call this method, you won't be able to
                 // bind OpenIdConnectRequest or OpenIdConnectResponse parameters.
@@ -85,20 +96,14 @@ namespace Mvc.Server
 
                 // Note: the Mvc.Client sample only uses the code flow and the password flow, but you
                 // can enable the other flows if you need to support implicit or client credentials.
-                options.AllowAuthorizationCodeFlow()
+                options
                        .AllowPasswordFlow()
                        .AllowRefreshTokenFlow();
 
+                options.UseJsonWebTokens();
+                options.AddEphemeralSigningKey();
                 // Make the "client_id" parameter mandatory when sending a token request.
                 options.RequireClientIdentification();
-
-                // When request caching is enabled, authorization and logout requests
-                // are stored in the distributed cache by OpenIddict and the user agent
-                // is redirected to the same page with a single parameter (request_id).
-                // This allows flowing large OpenID Connect requests even when using
-                // an external authentication provider like Google, Facebook or Twitter.
-                options.EnableRequestCaching();
-
                 // During development, you can disable the HTTPS requirement.
                 options.DisableHttpsRequirement();
 
@@ -113,6 +118,15 @@ namespace Mvc.Server
             services.AddTransient<ISmsSender, AuthMessageSender>();
         }
 
+        private static void AddAndConfigurePolicies(IServiceCollection services)
+        {
+            services.AddAuthorization(options =>
+            {
+                // we can make this more granular 
+                //options.AddPolicy(AppPolicies.Somepolicy, policy => policy.RequireClaim(AppClaimTypes.SomeClaim));
+            });
+        }
+
         public void Configure(IApplicationBuilder app)
         {
             app.UseDeveloperExceptionPage();
@@ -125,6 +139,35 @@ namespace Mvc.Server
 
             app.UseMvcWithDefaultRoute();
 
+
+            //app.UseOAuthValidation(options =>
+            //{
+            //    options.Audiences.Add("resource_server");
+            //});
+
+            ////app.UseOAuthIntrospection(options =>
+            ////{
+            ////    options.Authority = "self";
+            ////    options.Audiences.Add("resource_server");
+            ////    options.ClientId = "resource_server";
+            ////    options.ClientSecret = "875sqd4s5d748z78z7ds1ff8zz8814ff88ed8ea4z4zzd";
+            ////});
+
+
+            //app.UseJwtBearerAuthentication(new JwtBearerOptions
+            //{
+            //    Authority = "self",
+            //    Audience = "resource_server",
+            //    RequireHttpsMetadata = false,
+            //    TokenValidationParameters = new TokenValidationParameters
+            //    {
+            //        NameClaimType = OpenIdConnectConstants.Claims.Subject,
+            //        RoleClaimType = OpenIdConnectConstants.Claims.Role,
+            //    }
+            //});
+
+          
+
             // Seed the database with the sample applications.
             // Note: in a real world application, this step should be part of a setup script.
             InitializeAsync(app.ApplicationServices, CancellationToken.None).GetAwaiter().GetResult();
@@ -136,7 +179,7 @@ namespace Mvc.Server
             using (var scope = services.GetRequiredService<IServiceScopeFactory>().CreateScope())
             {
                 var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                await context.Database.EnsureCreatedAsync();
+                await context.Database.EnsureCreatedAsync(cancellationToken);
 
                 var manager = scope.ServiceProvider.GetRequiredService<OpenIddictApplicationManager<OpenIddictApplication>>();
 

@@ -7,6 +7,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using AspNet.Security.OpenIdConnect.Extensions;
 using AspNet.Security.OpenIdConnect.Primitives;
@@ -251,7 +252,7 @@ namespace Mvc.Server
                     OpenIdConnectConstants.Scopes.Email,
                     OpenIdConnectConstants.Scopes.Profile,
                     OpenIdConnectConstants.Scopes.OfflineAccess,
-                    OpenIddictConstants.Scopes.Roles
+                    OpenIddict.Core.OpenIddictConstants.Scopes.Roles
                 }.Intersect(request.GetScopes()));
             }
 
@@ -278,15 +279,23 @@ namespace Mvc.Server
                 // The other claims will only be added to the access_token, which is encrypted when using the default format.
                 if ((claim.Type == OpenIdConnectConstants.Claims.Name && ticket.HasScope(OpenIdConnectConstants.Scopes.Profile)) ||
                     (claim.Type == OpenIdConnectConstants.Claims.Email && ticket.HasScope(OpenIdConnectConstants.Scopes.Email)) ||
-                    (claim.Type == OpenIdConnectConstants.Claims.Role && ticket.HasScope(OpenIddictConstants.Claims.Roles)))
+                    (claim.Type == OpenIdConnectConstants.Claims.Role && ticket.HasScope(OpenIddict.Core.OpenIddictConstants.Claims.Roles)))
                 {
-                    destinations.Add(OpenIdConnectConstants.Destinations.IdentityToken);
-                }
+                    claim.SetDestinations(OpenIdConnectConstants.Destinations.IdentityToken, OpenIdConnectConstants.Destinations.AccessToken);
+                }else
 
-                claim.SetDestinations(destinations);
+                    claim.SetDestinations(OpenIdConnectConstants.Destinations.AccessToken);
             }
 
+            AddDynamicClaims(ticket);
+
             return ticket;
+        }
+
+        private void AddDynamicClaims(AuthenticationTicket ticket)
+        {
+            var claimsIdentity = ticket.Principal.Identity as ClaimsIdentity;
+            claimsIdentity.AddClaim("CustomClaimType", "CustomClaimValue", OpenIdConnectConstants.Destinations.AccessToken);
         }
     }
 }

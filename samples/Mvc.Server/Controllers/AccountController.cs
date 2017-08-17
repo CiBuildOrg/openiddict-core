@@ -1,6 +1,9 @@
 ﻿using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using AspNet.Security.OpenIdConnect.Extensions;
+using AspNet.Security.OpenIdConnect.Primitives;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -180,6 +183,24 @@ namespace Mvc.Server.Controllers
                 ViewData["LoginProvider"] = info.LoginProvider;
                 var email = info.Principal.FindFirstValue(ClaimTypes.Email);
                 return View("ExternalLoginConfirmation", new ExternalLoginConfirmationViewModel { Email = email });
+            }
+        }
+
+        private static void SetSupportedScopes(OpenIdConnectRequest request, AuthenticationTicket ticket)
+        {
+            if (!request.IsRefreshTokenGrantType())
+            {
+                // Hinweis: Der Scope "offline_access" wird benötigt das OpenIddict einen
+                // Refresh-Token ausstellen darf.
+                ticket.SetScopes(new[]
+                {
+                    OpenIdConnectConstants.Scopes.OpenId,
+                    OpenIdConnectConstants.Scopes.Email,
+                    OpenIdConnectConstants.Scopes.Profile,
+                    OpenIdConnectConstants.Scopes.OfflineAccess,
+                    OpenIddict.Core.OpenIddictConstants.Scopes.Roles
+
+                }.Intersect(request.GetScopes()));
             }
         }
 
