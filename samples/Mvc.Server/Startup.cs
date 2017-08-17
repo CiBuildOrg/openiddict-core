@@ -7,12 +7,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.IdentityModel.Tokens;
 using Mvc.Server.Models;
 using Mvc.Server.Services;
 using OpenIddict.Core;
 using OpenIddict.Models;
-using AspNet.Security.OAuth.Introspection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 namespace Mvc.Server
