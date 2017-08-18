@@ -14,13 +14,14 @@ namespace Mvc.Server.Controllers
 
         public ResourceController(UserManager<ApplicationUser> userManager)
         {
-            _userManager = userManager;
+            _userManager = userManager; 
         }
 
         [Authorize(AuthenticationSchemes = OAuthValidationDefaults.AuthenticationScheme)]
         [HttpGet("message")]
         public async Task<IActionResult> GetMessage()
         {
+            var userId = _userManager.GetUserId(User);
             var user = await _userManager.GetUserAsync(User);
             if (user == null)
             {

@@ -8,7 +8,7 @@ using AspNet.Security.OpenIdConnect.Primitives;
 using Microsoft.AspNetCore.Mvc;
 using Mvc.Server.ViewModels.Shared;
 
-namespace Mvc.Server
+namespace Mvc.Server.Controllers
 {
     public class ErrorController : Controller
     {

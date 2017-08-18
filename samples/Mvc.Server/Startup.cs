@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AspNet.Security.OAuth.Validation;
 using AspNet.Security.OpenIdConnect.Primitives;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
@@ -13,8 +16,13 @@ using OpenIddict.Core;
 using OpenIddict.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Authorization;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.Internal;
 using Microsoft.Extensions.Logging;
 using Mvc.Server.Filters;
 using Serilog;
@@ -45,30 +53,30 @@ namespace Mvc.Server
                 options.SwaggerDoc("v1", new Info { Title = "My Web API", Version = "v1" });
             });
 
-            // Add MVC Core
-            services.AddMvcCore(
-                    options =>
-                    {
-                        // Add global authorization filter 
-                        var policy = new AuthorizationPolicyBuilder()
-                            .RequireAuthenticatedUser()
-                            .Build();
+            //// Add MVC Core
+            //services.AddMvcCore(
+            //        options =>
+            //        {
+            //            // Add global authorization filter 
+            //            var policy = new AuthorizationPolicyBuilder()
+            //                .RequireAuthenticatedUser()
+            //                .Build();
 
-                        options.Filters.Add(new AuthorizeFilter(policy));
+            //            options.Filters.Add(new AuthorizeFilter1(policy));
 
-                        // Add global exception handler for production
-                        options.Filters.Add(typeof(CustomExceptionFilterAttribute));
+            //            // Add global exception handler for production
+            //            options.Filters.Add(typeof(CustomExceptionFilterAttribute));
 
-                        // Add global validation filter
-                        options.Filters.Add(typeof(ValidateModelFilterAttribute));
+            //            // Add global validation filter
+            //            options.Filters.Add(typeof(ValidateModelFilterAttribute));
 
-                    }
-                )
-                .AddJsonFormatters()
-                .AddAuthorization()
-                .AddDataAnnotations()
-                .AddCors()
-                .AddApiExplorer();
+            //        }
+            //    )
+            //    .AddJsonFormatters()
+            //    .AddAuthorization()
+            //    .AddDataAnnotations()
+            //    .AddCors()
+            //    .AddApiExplorer();
             services.AddMvc();
 
             services.AddDbContext<ApplicationDbContext>(options =>
@@ -120,7 +128,7 @@ namespace Mvc.Server
 
                 .AddJwtBearer(options =>
                 {
-                    options.Authority = "self";
+                    options.Authority = "http://localhost:5000";
                     options.Audience = "resource-server";
                     options.RequireHttpsMetadata = false;
                 });
@@ -153,13 +161,8 @@ namespace Mvc.Server
                 // Make the "client_id" parameter mandatory when sending a token request.
                 options.RequireClientIdentification();
                 // During development, you can disable the HTTPS requirement.
-                options.DisableHttpsRequirement();
 
-                // Note: to use JWT access tokens instead of the default
-                // encrypted format, the following lines are required:
-                //
-                // options.UseJsonWebTokens();
-                // options.AddEphemeralSigningKey();
+                options.DisableHttpsRequirement();
             });
 
             services.AddTransient<IEmailSender, AuthMessageSender>();
@@ -252,6 +255,151 @@ namespace Mvc.Server
                     await manager.CreateAsync(application, cancellationToken);
                 }
             }
+        }
+    }
+
+
+    /// <summary>
+    /// An implementation of <see cref="T:Microsoft.AspNetCore.Mvc.Filters.IAsyncAuthorizationFilter" /> which applies a specific
+    /// <see cref="T:Microsoft.AspNetCore.Authorization.AuthorizationPolicy" />. MVC recognizes the <see cref="T:Microsoft.AspNetCore.Authorization.AuthorizeAttribute" /> and adds an instance of
+    /// this filter to the associated action or controller.
+    /// </summary>
+    public class AuthorizeFilter1 : IAsyncAuthorizationFilter, IFilterFactory
+    {
+        /// <summary>
+        /// The <see cref="T:Microsoft.AspNetCore.Authorization.IAuthorizationPolicyProvider" /> to use to resolve policy names.
+        /// </summary>
+        public IAuthorizationPolicyProvider PolicyProvider { get; }
+
+        /// <summary>
+        /// The <see cref="T:Microsoft.AspNetCore.Authorization.IAuthorizeData" /> to combine into an <see cref="T:Microsoft.AspNetCore.Authorization.IAuthorizeData" />.
+        /// </summary>
+        public IEnumerable<IAuthorizeData> AuthorizeData { get; }
+
+        /// <summary>Gets the authorization policy to be used.</summary>
+        /// <remarks>
+        /// If<c>null</c>, the policy will be constructed using
+        /// <see cref="M:Microsoft.AspNetCore.Authorization.AuthorizationPolicy.CombineAsync(Microsoft.AspNetCore.Authorization.IAuthorizationPolicyProvider,System.Collections.Generic.IEnumerable{Microsoft.AspNetCore.Authorization.IAuthorizeData})" />.
+        /// </remarks>
+        public AuthorizationPolicy Policy { get; }
+
+        bool IFilterFactory.IsReusable => true;
+
+        /// <summary>
+        /// Initialize a new <see cref="T:Microsoft.AspNetCore.Mvc.Authorization.AuthorizeFilter" /> instance.
+        /// </summary>
+        /// <param name="policy">Authorization policy to be used.</param>
+        public AuthorizeFilter1(AuthorizationPolicy policy)
+        {
+            Policy = policy ?? throw new ArgumentNullException(nameof(policy));
+        }
+
+        /// <summary>
+        /// Initialize a new <see cref="T:Microsoft.AspNetCore.Mvc.Authorization.AuthorizeFilter" /> instance.
+        /// </summary>
+        /// <param name="policyProvider">The <see cref="T:Microsoft.AspNetCore.Authorization.IAuthorizationPolicyProvider" /> to use to resolve policy names.</param>
+        /// <param name="authorizeData">The <see cref="T:Microsoft.AspNetCore.Authorization.IAuthorizeData" /> to combine into an <see cref="T:Microsoft.AspNetCore.Authorization.IAuthorizeData" />.</param>
+        public AuthorizeFilter1(IAuthorizationPolicyProvider policyProvider, IEnumerable<IAuthorizeData> authorizeData)
+            : this(authorizeData)
+        {
+            PolicyProvider = policyProvider ?? throw new ArgumentNullException(nameof(policyProvider));
+        }
+
+        /// <summary>
+        /// Initializes a new instance of <see cref="T:Microsoft.AspNetCore.Mvc.Authorization.AuthorizeFilter" />.
+        /// </summary>
+        /// <param name="authorizeData">The <see cref="T:Microsoft.AspNetCore.Authorization.IAuthorizeData" /> to combine into an <see cref="T:Microsoft.AspNetCore.Authorization.IAuthorizeData" />.</param>
+        public AuthorizeFilter1(IEnumerable<IAuthorizeData> authorizeData)
+        {
+            AuthorizeData = authorizeData ?? throw new ArgumentNullException(nameof(authorizeData));
+        }
+
+        /// <summary>
+        /// Initializes a new instance of <see cref="T:Microsoft.AspNetCore.Mvc.Authorization.AuthorizeFilter" />.
+        /// </summary>
+        /// <param name="policy">The name of the policy to require for authorization.</param>
+        public AuthorizeFilter1(string policy)
+            : this(new[]
+            {
+                new AuthorizeAttribute(policy)
+            })
+        {
+        }
+
+        /// <inheritdoc />
+        public virtual async Task OnAuthorizationAsync(AuthorizationFilterContext context)
+        {
+            var filters = context.Filters;
+
+            var descriptor = context?.ActionDescriptor as ControllerActionDescriptor;
+            if (descriptor != null)
+            {
+                var attributes = descriptor.MethodInfo.GetCustomAttributes(true);
+                var routeAttribute = attributes.SingleOrDefault(x => x.GetType() == typeof(RouteAttribute));
+
+                if (routeAttribute != null)
+                {
+                    var attribute = (RouteAttribute)routeAttribute;
+
+                    if (attribute.Template == "~/error")
+                        return;
+                }
+
+                // if we ever have allowAnonymous on methods 
+                if (attributes.Any(x => x.GetType() == typeof(AllowAnonymousAttribute)))
+                {
+                    return;
+                }
+
+                var authorizeAttribute = attributes.SingleOrDefault(x => x.GetType() == typeof(AuthorizeAttribute));
+                if (authorizeAttribute != null)
+                {
+                    var attribute = (AuthorizeAttribute) authorizeAttribute;
+                    if (attribute.AuthenticationSchemes == OAuthValidationDefaults.AuthenticationScheme)
+                    {
+                        return;
+                    }
+                }
+            }
+
+            bool Func(IFilterMetadata item) => item is IAllowAnonymousFilter;
+            if (filters.Any(Func))
+                return;
+
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+            var effectivePolicy = Policy;
+            if (effectivePolicy == null)
+            {
+                if (PolicyProvider == null)
+                    throw new InvalidOperationException("Auth policy cannot be created");
+                effectivePolicy = await AuthorizationPolicy.CombineAsync(PolicyProvider, AuthorizeData);
+            }
+            if (effectivePolicy == null)
+                return;
+            var policyEvaluator = context.HttpContext.RequestServices.GetRequiredService<IPolicyEvaluator>();
+            var authenticationResult = await policyEvaluator.AuthenticateAsync(effectivePolicy, context.HttpContext);
+
+            
+
+            var authorizationResult = await policyEvaluator.AuthorizeAsync(effectivePolicy, authenticationResult, context.HttpContext, context);
+            if (authorizationResult.Challenged)
+            {
+                context.Result = new ChallengeResult(effectivePolicy.AuthenticationSchemes.ToArray());
+            }
+            else
+            {
+                if (!authorizationResult.Forbidden)
+                    return;
+                context.Result = new ForbidResult(effectivePolicy.AuthenticationSchemes.ToArray());
+            }
+        }
+
+        IFilterMetadata IFilterFactory.CreateInstance(IServiceProvider serviceProvider)
+        {
+            if (Policy != null || PolicyProvider != null)
+                return this;
+            return AuthorizationApplicationModelProvider.GetFilter(serviceProvider.GetRequiredService<IAuthorizationPolicyProvider>(), AuthorizeData);
         }
     }
 }

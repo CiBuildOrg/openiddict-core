@@ -10,5 +10,6 @@ namespace Mvc.Server.Models
             : base(options) { }
         
         public DbSet<OpenIddictApplication> OpenIdApplications { get; set; }
+        public DbSet<OpenIddictToken> OpenIddictTokens { get; set; }
     }
 }

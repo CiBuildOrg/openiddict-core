@@ -23,7 +23,7 @@ using Mvc.Server.ViewModels.Shared;
 using OpenIddict.Core;
 using OpenIddict.Models;
 
-namespace Mvc.Server
+namespace Mvc.Server.Controllers
 {
     public class AuthorizationController : Controller
     {
@@ -31,17 +31,20 @@ namespace Mvc.Server
         private readonly IOptions<IdentityOptions> _identityOptions;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly ApplicationDbContext _context;
 
         public AuthorizationController(
             OpenIddictApplicationManager<OpenIddictApplication> applicationManager,
             IOptions<IdentityOptions> identityOptions,
             SignInManager<ApplicationUser> signInManager,
-            UserManager<ApplicationUser> userManager)
+            UserManager<ApplicationUser> userManager, 
+            ApplicationDbContext context)
         {
             _applicationManager = applicationManager;
             _identityOptions = identityOptions;
             _signInManager = signInManager;
             _userManager = userManager;
+            _context = context;
         }
 
         #region Authorization code, implicit and implicit flows
@@ -141,13 +144,15 @@ namespace Mvc.Server
             // to the post_logout_redirect_uri specified by the client application.
             return SignOut(OpenIdConnectServerDefaults.AuthenticationScheme);
         }
+
         #endregion
 
         #region Password, authorization code and refresh token flows
         // Note: to support non-interactive flows like password,
-        // you must provide your own token endpoint action:
+        // you must provide your own token endpoint action: 
 
         [HttpPost("~/connect/token"), Produces("application/json")]
+        [AllowAnonymous]
         public async Task<IActionResult> Exchange(OpenIdConnectRequest request)
         {
             Debug.Assert(request.IsTokenRequest(),
@@ -175,6 +180,14 @@ namespace Mvc.Server
                         Error = OpenIdConnectConstants.Errors.InvalidGrant,
                         ErrorDescription = "The username/password couple is invalid."
                     });
+                }
+
+                // delete all refresh tokens for the user
+                var tokens = _context.OpenIddictTokens.Where(x => x.Subject == user.Id).ToList();
+                if (tokens.Any())
+                {
+                    _context.RemoveRange(tokens);
+                    await _context.SaveChangesAsync();
                 }
 
                 // Create a new authentication ticket.
@@ -215,7 +228,7 @@ namespace Mvc.Server
                 // Create a new authentication ticket, but reuse the properties stored in the
                 // authorization code/refresh token, including the scopes originally granted.
                 var ticket = await CreateTicketAsync(request, user, info.Properties);
-                
+
                 return SignIn(ticket.Principal, ticket.Properties, ticket.AuthenticationScheme);
             }
 
@@ -250,11 +263,11 @@ namespace Mvc.Server
                     OpenIdConnectConstants.Scopes.Email,
                     OpenIdConnectConstants.Scopes.Profile,
                     OpenIdConnectConstants.Scopes.OfflineAccess,
-                    OpenIddict.Core.OpenIddictConstants.Scopes.Roles
+                    OpenIddictConstants.Scopes.Roles
                 }.Intersect(request.GetScopes()));
             }
 
-            ticket.SetResources("resource_server");
+            ticket.SetResources("resource-server");
 
             // Note: by default, claims are NOT automatically included in the access and identity tokens.
             // To allow OpenIddict to serialize them, you must attach them a destination, that specifies
@@ -275,9 +288,9 @@ namespace Mvc.Server
                     (claim.Type == OpenIdConnectConstants.Claims.Role && ticket.HasScope(OpenIddict.Core.OpenIddictConstants.Claims.Roles)))
                 {
                     claim.SetDestinations(OpenIdConnectConstants.Destinations.IdentityToken, OpenIdConnectConstants.Destinations.AccessToken);
-                }else
+                }
 
-                    claim.SetDestinations(OpenIdConnectConstants.Destinations.AccessToken);
+                claim.SetDestinations(OpenIdConnectConstants.Destinations.AccessToken);
             }
 
             AddDynamicClaims(ticket);

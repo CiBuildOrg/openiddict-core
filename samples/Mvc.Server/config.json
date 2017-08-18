@@ -2,6 +2,7 @@
   "ConnectionStrings": {
     "IdentityContext": "Data Source=.;Initial Catalog=AdfDb;Integrated Security=True;"
   },
+  
   "Serilog": {
     "MinimumLevel": {
       "Default": "Debug",
